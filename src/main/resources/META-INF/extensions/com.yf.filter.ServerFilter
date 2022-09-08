@@ -1,0 +1,3 @@
+serverTokenFilter=com.yf.filter.server.ServerTokenFilterImpl
+serverServiceBeforeLimitFilterImpl=com.yf.filter.server.ServerServiceBeforeLimitFilterImpl
+serverServiceAfterLimitFilterImpl=com.yf.filter.server.ServerServiceAfterLimitFilterImpl
