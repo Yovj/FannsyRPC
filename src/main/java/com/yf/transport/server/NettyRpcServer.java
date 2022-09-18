@@ -21,7 +21,9 @@ import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.util.concurrent.DefaultEventExecutorGroup;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
 
+import javax.annotation.PostConstruct;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.Map;
@@ -36,6 +38,7 @@ import java.util.concurrent.TimeUnit;
  * @url:
  */
 @Slf4j
+@Component
 public class NettyRpcServer {
     public static final int PORT = 9998;
 
@@ -56,11 +59,11 @@ public class NettyRpcServer {
     public void registerService(RpcServiceConfig rpcServiceConfig){
         serviceProvider.publishService(rpcServiceConfig);
         String serviceToken = rpcServiceConfig.getToken();
+        semaphoreHolderMap.put(rpcServiceConfig.getRpcServiceName(),new SemaphoreHolder(RpcConstants.MAX_SEMAPHORE_NUMS));
         if (StringUtil.isEmpty(serviceToken)){
             return;
         }
         TOKEN_MAP.put(rpcServiceConfig.getRpcServiceName(),serviceToken);
-        semaphoreHolderMap.put(rpcServiceConfig.getRpcServiceName(),new SemaphoreHolder(RpcConstants.MAX_SEMAPHORE_NUMS));
     }
 
     public String getServiceToken(String serviceName){

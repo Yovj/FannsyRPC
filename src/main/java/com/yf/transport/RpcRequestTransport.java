@@ -1,5 +1,6 @@
 package com.yf.transport;
 
+import com.yf.config.RpcServiceConfig;
 import com.yf.remoting.dto.RpcRequest;
 
 /**
@@ -10,5 +11,5 @@ import com.yf.remoting.dto.RpcRequest;
  * @url:
  */
 public interface RpcRequestTransport {
-    Object sendRpcRequest(RpcRequest rpcRequest);
+    Object sendRpcRequest(RpcRequest rpcRequest, RpcServiceConfig rpcServiceConfig);
 }

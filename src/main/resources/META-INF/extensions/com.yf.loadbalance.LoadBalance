@@ -1,1 +1,2 @@
-loadBalance=com.yf.loadbalance.balancer.RandomBalancer
+randomBalancer=com.yf.loadbalance.balancer.RandomBalancer
+consistentHashLoadBalance=com.yf.loadbalance.balancer.ConsistentHashLoadBalance

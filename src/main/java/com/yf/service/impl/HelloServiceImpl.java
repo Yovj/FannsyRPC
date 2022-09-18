@@ -1,6 +1,7 @@
 package com.yf.service.impl;
 
 import com.yf.service.HelloService;
+import com.yf.spring.annotaion.RpcService;
 import lombok.*;
 
 /**
@@ -17,6 +18,7 @@ import lombok.*;
 @Setter
 @Builder
 @ToString
+@RpcService(group = "test1",version = "version1")
 public class HelloServiceImpl implements HelloService {
     @Override
     public void sayHello() {

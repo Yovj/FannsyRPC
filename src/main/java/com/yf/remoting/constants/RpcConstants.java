@@ -29,4 +29,9 @@ public class RpcConstants {
 
     public static final int MAX_SEMAPHORE_NUMS = 50;
 
+    public static final int SERVICE_NODE = 0;
+    public static final int PERMIT_NODE = 1;
+
+    public static final int RATELIMIT = 500;
+
 }

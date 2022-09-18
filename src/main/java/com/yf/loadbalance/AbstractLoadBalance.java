@@ -1,5 +1,6 @@
 package com.yf.loadbalance;
 
+import com.yf.registry.zk.ProviderNodeInfo;
 import com.yf.remoting.dto.RpcRequest;
 
 import java.util.List;
@@ -14,17 +15,17 @@ import java.util.List;
 public abstract class AbstractLoadBalance implements LoadBalance{
 
     @Override
-    public String selectServiceAddress(List<String> serviceUrlList, RpcRequest rpcRequest) {
+    public String selectServiceAddress(List<ProviderNodeInfo> serviceUrlList, RpcRequest rpcRequest) {
         // 进行一个简单的初筛
         if (serviceUrlList == null || serviceUrlList.isEmpty()){
             return null;
         }
         if (serviceUrlList.size() == 1){
-            return serviceUrlList.get(0);
+            return serviceUrlList.get(0).getServiceAddr();
         }
         return doSelect(serviceUrlList,rpcRequest);
     }
 
-    protected abstract String doSelect(List<String> serviceUrlList, RpcRequest rpcRequest);
+    protected abstract String doSelect(List<ProviderNodeInfo> serviceUrlList, RpcRequest rpcRequest);
 
 }

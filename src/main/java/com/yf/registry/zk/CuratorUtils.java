@@ -1,5 +1,6 @@
 package com.yf.registry.zk;
 
+import com.yf.remoting.constants.RpcConstants;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.curator.RetryPolicy;
 import org.apache.curator.framework.CuratorFramework;
@@ -10,9 +11,7 @@ import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.apache.zookeeper.CreateMode;
 
 import java.net.InetSocketAddress;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
@@ -31,8 +30,10 @@ public final class CuratorUtils {
     private static final int BASE_SLEEP_TIME = 1000;
     private static final int MAX_RETRIES = 3;
     private static CuratorFramework zkClient;
-    private static final Map<String, List<String>> SERVICE_ADDRESS_MAP = new ConcurrentHashMap<String, List<String>>();
+    private static final Map<String, Set<ProviderNodeInfo>> SERVICE_ADDRESS_MAP = new ConcurrentHashMap<>();
     private static final Set<String> REGISTERED_PATH_SET = ConcurrentHashMap.newKeySet();
+
+    private static final Map<String, List<String>> PERMIT_PATH_MAP = new ConcurrentHashMap<>();
 
 
     /*
@@ -69,7 +70,7 @@ public final class CuratorUtils {
      * @param path
     * @return void
     **/
-    public static void createPersistentNode(CuratorFramework zkClient, String path){
+    public static void createPersistentNode(CuratorFramework zkClient, String path, int mode){
         try {
             if (REGISTERED_PATH_SET.contains(path) || zkClient.checkExists().forPath(path) != null){
                 log.info("The node already exists. The node is:[{}]", path);
@@ -77,13 +78,46 @@ public final class CuratorUtils {
                 zkClient.create().creatingParentsIfNeeded().withMode(CreateMode.PERSISTENT).forPath(path);
                 log.info("The node was created successfully. The node is:[{}]", path);
             }
-            REGISTERED_PATH_SET.add(path);
+            if (mode == RpcConstants.SERVICE_NODE){
+                REGISTERED_PATH_SET.add(path);
+            }
 
         } catch (Exception e){
             log.error("create persistent node for path [{}] fail", path);
         }
 
     }
+
+    public static void updatePermit(CuratorFramework zkClient,String serviceAddress, String permitPath){
+        try {
+            List<String> permitList = zkClient.getChildren().forPath(permitPath);
+            if (permitList != null){
+                PERMIT_PATH_MAP.put(serviceAddress,permitList);
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static List<String> getPermitList(CuratorFramework zkClient, String rpcServiceName, String serviceAddress){
+        if (PERMIT_PATH_MAP.containsKey(serviceAddress)){
+            return PERMIT_PATH_MAP.get(serviceAddress);
+        } else {
+            String servicePath = ZK_REGISTER_ROOT_PATH + "/" + rpcServiceName;
+            String permitPath = servicePath + "/" + serviceAddress +  "/permit";
+            List<String> permitList = new ArrayList<>();
+            try {
+                permitList = zkClient.getChildren().forPath(permitPath);
+            } catch (Exception e) {
+
+            }
+            return permitList;
+        }
+
+
+
+    }
+
 
     /*
     * @Description
@@ -106,19 +140,32 @@ public final class CuratorUtils {
         log.info("All registered services on the server are cleared:[{}]", REGISTERED_PATH_SET.toString());
     }
 
-    public static List<String> getChildrenNodes(CuratorFramework zkClient, String rpcServiceName){
+    public static Set<ProviderNodeInfo> getChildrenNodes(CuratorFramework zkClient, String rpcServiceName){
         if (SERVICE_ADDRESS_MAP.containsKey(rpcServiceName)){
             return SERVICE_ADDRESS_MAP.get(rpcServiceName);
         }
 
-        List<String> result = null;
+        Set<ProviderNodeInfo> result = new HashSet<>();
         String servicePath = ZK_REGISTER_ROOT_PATH + "/" + rpcServiceName;
         try {
-            result = zkClient.getChildren().forPath(servicePath);
+            List<String> stringList = zkClient.getChildren().forPath(servicePath);
+
+            stringList.forEach(serviceAddress -> {
+                ProviderNodeInfo providerNode = ProviderNodeInfo.builder()
+                        .rpcServiceName(rpcServiceName)
+                        .serviceAddr(serviceAddress)
+                        .weight(100).build();
+                result.add(providerNode);
+
+                String permitPath = servicePath + "/" + serviceAddress +  "/permit";
+                System.out.println(permitPath);
+                updatePermit(zkClient,serviceAddress,permitPath);
+
+            });
             SERVICE_ADDRESS_MAP.put(rpcServiceName,result);
             regiterWatcher(rpcServiceName,zkClient);
-
-        } catch (Exception e){
+        }
+        catch (Exception e){
             log.error("get children nodes for path [{}] fail", servicePath);
         }
         return result;
@@ -136,11 +183,30 @@ public final class CuratorUtils {
     private static void regiterWatcher(String rpcServiceName, CuratorFramework zkClient) throws Exception {
         String servicePath = ZK_REGISTER_ROOT_PATH + "/" + rpcServiceName;
         PathChildrenCache pathChildrenCache = new PathChildrenCache(zkClient,servicePath,true);
+        Set<ProviderNodeInfo> providerNodeInfos = SERVICE_ADDRESS_MAP.get(rpcServiceName);
         PathChildrenCacheListener pathChildrenCacheListener = ((curatorFramework, pathChildrenCacheEvent) -> {
-            List<String> serviceAddress = curatorFramework.getChildren().forPath(servicePath);
-            SERVICE_ADDRESS_MAP.put(rpcServiceName,serviceAddress);
+            List<String> serviceAddressList = curatorFramework.getChildren().forPath(servicePath);
+
+            serviceAddressList.forEach(serviceAddress -> {
+                ProviderNodeInfo providerNodeInfo = ProviderNodeInfo.builder()
+                        .rpcServiceName(rpcServiceName)
+                        .serviceAddr(serviceAddress)
+                        .weight(100)
+                        .build();;
+                providerNodeInfos.add(providerNodeInfo);
+
+
+                String permitPath = servicePath + "/" + serviceAddress +  "/permit";
+                System.out.println(permitPath);
+                updatePermit(zkClient,serviceAddress,permitPath);
+            });
+
+            SERVICE_ADDRESS_MAP.put(rpcServiceName,providerNodeInfos);
+
+            System.out.println(providerNodeInfos);
+
         });
-        pathChildrenCache.getListenable().addListener(pathChildrenCacheListener);
+        pathChildrenCache.getListenable().addListener(pathChildrenCacheListener); // 底层是个 map ， 多次 put 也无妨
         pathChildrenCache.start();
     }
 

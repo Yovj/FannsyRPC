@@ -1,6 +1,13 @@
 package com.yf.config;
 
+import com.yf.common.utils.IpUtil;
 import lombok.*;
+
+import java.net.InetSocketAddress;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 /**
  * @description: TODO
@@ -31,6 +38,29 @@ public class RpcServiceConfig {
     private Object service;
 
     private String token;
+
+    private Set<String> permitIps = new HashSet<>();
+
+    private List<String> directIp;
+
+    public void addPermit(String inetAddress){
+        if (IpUtil.isValidIp(inetAddress)){
+            permitIps.add(inetAddress);
+        } else {
+            throw new IllegalArgumentException("invalid ip address .");
+        }
+
+    }
+
+    public void removePermit(InetSocketAddress inetSocketAddress){
+        if (inetSocketAddress != null){
+            permitIps.remove(inetSocketAddress);
+        }
+    }
+
+    public void clearPermit(){
+        permitIps.clear();
+    }
 
     public String getRpcServiceName(){
         return this.getServiceName() + this.getGroup() + this.getVersion();

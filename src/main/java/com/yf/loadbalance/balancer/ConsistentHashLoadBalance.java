@@ -1,15 +1,13 @@
 package com.yf.loadbalance.balancer;
 
 import com.yf.loadbalance.AbstractLoadBalance;
+import com.yf.registry.zk.ProviderNodeInfo;
 import com.yf.remoting.dto.RpcRequest;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -22,8 +20,6 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ConsistentHashLoadBalance extends AbstractLoadBalance {
 
     private final Map<String, ConsistentHashSelector> selectors = new ConcurrentHashMap<>();
-
-
 
     static class ConsistentHashSelector{
         private final int identityHashCode;
@@ -80,10 +76,13 @@ public class ConsistentHashLoadBalance extends AbstractLoadBalance {
 
     }
     @Override
-    protected String doSelect(List<String> serviceUrlList, RpcRequest rpcRequest) {
-        int identityHashCode = System.identityHashCode(serviceUrlList);
+    protected String doSelect(List<ProviderNodeInfo> serviceProviderList, RpcRequest rpcRequest) {
+        int identityHashCode = System.identityHashCode(serviceProviderList);
         String rpcServiceName = rpcRequest.getRpcServiceName();
-
+        List<String> serviceUrlList = new ArrayList<>();
+        serviceProviderList.forEach(provider -> {
+            serviceUrlList.add(provider.getServiceAddr());
+        });
         ConsistentHashSelector selector = selectors.get(rpcServiceName);
         if (selector == null || selector.identityHashCode != identityHashCode){
             selectors.putIfAbsent(rpcServiceName,new ConsistentHashSelector(serviceUrlList,160,identityHashCode));

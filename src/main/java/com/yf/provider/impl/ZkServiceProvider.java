@@ -62,7 +62,7 @@ public class ZkServiceProvider implements ServiceProvider {
         try {
             String host = InetAddress.getLocalHost().getHostAddress();
             this.addService(rpcServiceConfig);
-            serviceRegistry.registerService(new InetSocketAddress(host, NettyRpcServer.PORT),rpcServiceConfig.getRpcServiceName());
+            serviceRegistry.registerService(new InetSocketAddress(host, NettyRpcServer.PORT),rpcServiceConfig);
 
         } catch (UnknownHostException e) {
             log.error("occur exception when getHostAddress", e);

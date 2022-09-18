@@ -10,6 +10,7 @@ import lombok.ToString;
 public enum RpcResponseCodeEnum {
     SUCCESS(200,"Remote call is success"),
     FAIL(500,"Remote call is failed"),
+    RPC_FAIL(400,"Remote call is failed, caused by rpc"),
 
     FAIL_TOKEN_ILLEGAL(300,"service token is illegal");
 

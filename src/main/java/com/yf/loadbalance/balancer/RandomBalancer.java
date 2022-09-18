@@ -1,6 +1,7 @@
 package com.yf.loadbalance.balancer;
 
 import com.yf.loadbalance.AbstractLoadBalance;
+import com.yf.registry.zk.ProviderNodeInfo;
 import com.yf.remoting.dto.RpcRequest;
 
 import java.util.List;
@@ -15,8 +16,8 @@ import java.util.Random;
  */
 public class RandomBalancer extends AbstractLoadBalance {
     @Override
-    protected String doSelect(List<String> serviceUrlList, RpcRequest rpcRequest) {
+    protected String doSelect(List<ProviderNodeInfo> serviceUrlList, RpcRequest rpcRequest) {
         Random random = new Random();
-        return serviceUrlList.get(random.nextInt(serviceUrlList.size()));
+        return serviceUrlList.get(random.nextInt(serviceUrlList.size())).getServiceAddr();
     }
 }

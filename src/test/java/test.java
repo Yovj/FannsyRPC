@@ -1,16 +1,13 @@
+import com.google.common.util.concurrent.RateLimiter;
+import com.yf.FannsyRPCApplication;
 import com.yf.Robot;
 import com.yf.common.extension.ExtensionLoader;
 import com.yf.common.factory.SingletonFactory;
 import com.yf.compress.Compress;
 import com.yf.compress.gzip.GzipCompress;
 import com.yf.config.RpcServiceConfig;
-import com.yf.loadbalance.balancer.ConsistentHashLoadBalance;
+import com.yf.example.ExampleClient;
 import com.yf.proxy.RpcClientProxy;
-import com.yf.registry.ServiceDiscovery;
-import com.yf.registry.ServiceRegistry;
-import com.yf.registry.zk.ServiceDiscoveryImpl;
-import com.yf.registry.zk.ServiceRegisterImpl;
-import com.yf.remoting.dto.RpcRequest;
 import com.yf.remoting.dto.RpcResponse;
 import com.yf.serialize.Serializer;
 import com.yf.serialize.kyro.KyroSerializer;
@@ -25,13 +22,20 @@ import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.junit4.SpringRunner;
 
+import javax.annotation.Resource;
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
 
 /**
  * @description: TODO
@@ -41,6 +45,8 @@ import java.util.concurrent.ExecutionException;
  * @url:
  */
 @Slf4j
+@SpringBootTest(classes = FannsyRPCApplication.class)
+@RunWith(SpringRunner.class)
 public class test {
 
     @Test
@@ -81,25 +87,6 @@ public class test {
     }
 
     @Test
-    public void testRegistry(){
-        RpcRequest request = RpcRequest.builder()
-                .methodName("myMethod")
-                .interfaceName("myInterface")
-                .group("myGroup")
-                .build();
-
-        ServiceRegistry serviceRegistry = new ServiceRegisterImpl();
-        serviceRegistry.registerService(new InetSocketAddress("192.168.64.129",7777),request.getRpcServiceName());
-
-
-        ServiceDiscovery serviceDiscovery = new ServiceDiscoveryImpl();
-
-
-        InetSocketAddress inetSocketAddress = serviceDiscovery.lookupService(request);
-        System.out.println(inetSocketAddress);
-    }
-
-    @Test
     public void testZip() throws IOException {
         Compress compress = new GzipCompress();
         byte[] bytes = "javaabchahahahhahahasdjfhsjkhncoscooasnflvnalbfhacjklnaklnscklnlajkbjklcbjkab vmls dlvbnljashbvlakl;vc#^#%&$fvhuihinadfllhahhahahahahha".getBytes();
@@ -117,11 +104,16 @@ public class test {
     @Test
     public void testServerRegiste(){
         HelloService helloService = new HelloServiceImpl();
+        HashSet<String> permitIps = new HashSet<>();
+        permitIps.add("192.168.64.129");
+        permitIps.add("100.80.185.154");
+
         RpcServiceConfig rpcServiceConfig = RpcServiceConfig.builder()
                 .group("test1")
                 .version("version1")
                 .service(helloService)
                 .token("token-a")
+//                .permitIps(permitIps)
                 .build();
         // 手工注册服务
 
@@ -137,16 +129,21 @@ public class test {
 
     @Test
     public void testClientDiscovery() throws IOException {
+        ArrayList<String> directIps = new ArrayList<>();
+//        directIps.add("192.168.64.129");
+
         RpcServiceConfig rpcServiceConfig = new RpcServiceConfig();
         rpcServiceConfig.setGroup("test1");
         rpcServiceConfig.setVersion("version1");
         rpcServiceConfig.setToken("token-a");
+        rpcServiceConfig.setDirectIp(directIps);
         RpcRequestTransport rpcRequestTransport = SingletonFactory.getInstance(NettyRpcClient.class);
         RpcClientProxy rpcClientProxy = new RpcClientProxy(rpcServiceConfig,rpcRequestTransport);
         HelloService helloService = rpcClientProxy.getProxy(HelloService.class);
         helloService.sayHello();
         System.out.println("yyyyy");
         System.in.read();
+
 
     }
 
@@ -166,24 +163,76 @@ public class test {
 
     @Test
     public void testBalance(){
-        List<String> serviceUrlList = new ArrayList<>();
-        serviceUrlList.add("192.168.64.129:100");
-        serviceUrlList.add("192.168.64.130:100");
-        serviceUrlList.add("192.168.64.131:100");
-        serviceUrlList.add("192.168.64.132:100");
-        serviceUrlList.add("192.168.64.133:100");
-        System.out.println(serviceUrlList);
-        HelloService helloService = new HelloServiceImpl();
-        String param = "ac";
-        RpcRequest rpcRequest = RpcRequest.builder().requestId("abc").parameters(new Object[]{param}).methodName("helloService").build();
+//        List<String> serviceUrlList = new ArrayList<>();
+//        serviceUrlList.add("192.168.64.129:100");
+//        serviceUrlList.add("192.168.64.130:100");
+//        serviceUrlList.add("192.168.64.131:100");
+//        serviceUrlList.add("192.168.64.132:100");
+//        serviceUrlList.add("192.168.64.133:100");
+//        System.out.println(serviceUrlList);
+//        HelloService helloService = new HelloServiceImpl();
+//        String param = "ac";
+//        RpcRequest rpcRequest = RpcRequest.builder().requestId("abc").parameters(new Object[]{param}).methodName("helloService").build();
+//
+//        ConsistentHashLoadBalance consistentHashLoadBalance = new ConsistentHashLoadBalance();
+//        String s = consistentHashLoadBalance.selectServiceAddress(serviceUrlList, rpcRequest);
+//        System.out.println(s);
 
-        ConsistentHashLoadBalance consistentHashLoadBalance = new ConsistentHashLoadBalance();
-        String s = consistentHashLoadBalance.selectServiceAddress(serviceUrlList, rpcRequest);
-        System.out.println(s);
+    }
+
+    private static volatile RateLimiter rateLimiter = RateLimiter.create(5);
+
+    @Test
+    public void testLimit() throws InterruptedException {
+        Thread[] threads = new Thread[15];
+
+        for (int i = 0; i < 15; i++) {
+            threads[i] = new Thread(() -> {
+                if (rateLimiter.tryAcquire()){
+                    System.out.println("i am in");
+                }
+                else {
+                    System.out.println("out .........");
+                }
+            });
+        }
+
+        for (int i = 0; i < 15; i++) {
+            Thread.sleep(100);
+            threads[i].start();
+        }
+
 
 
 
     }
+
+
+
+    @Resource
+    private HelloService helloService;
+
+    @Resource
+    private ExampleClient exampleClient;
+    @Test
+    public void testAnnotaionServer(){
+        System.out.println(helloService);
+        try {
+            System.in.read();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+
+    }
+
+    @Test
+    public void testAnnotaionClient(){
+        exampleClient.testClient();
+    }
+
+
+
 
 
 

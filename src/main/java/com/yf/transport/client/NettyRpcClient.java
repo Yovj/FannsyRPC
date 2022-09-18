@@ -5,6 +5,7 @@ import com.yf.common.enums.RpcErrorMessageEnum;
 import com.yf.common.enums.SerializationTypeEnum;
 import com.yf.common.exception.RpcException;
 import com.yf.common.factory.SingletonFactory;
+import com.yf.config.RpcServiceConfig;
 import com.yf.registry.ServiceDiscovery;
 import com.yf.registry.zk.ServiceDiscoveryImpl;
 import com.yf.remoting.constants.RpcConstants;
@@ -22,6 +23,7 @@ import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.timeout.IdleStateHandler;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
 
 import java.net.InetSocketAddress;
 import java.util.concurrent.CompletableFuture;
@@ -35,7 +37,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @date: 2022/9/2 16:28
  * @version: 1.0.0
  * @url:
- */@Slf4j
+ */
+@Slf4j
+@Component
 public class NettyRpcClient implements RpcRequestTransport {
     private final ServiceDiscovery serviceDiscovery;
     private final UnprocessedRequests unprocessedRequests;
@@ -110,9 +114,9 @@ public class NettyRpcClient implements RpcRequestTransport {
         return channel;
     }
 
-    public Object sendRpcRequest(RpcRequest rpcRequest) {
+    public Object sendRpcRequest(RpcRequest rpcRequest, RpcServiceConfig rpcServiceConfig) {
         CompletableFuture<RpcResponse<Object>> resultFuture = new CompletableFuture<>();
-        InetSocketAddress inetSocketAddress = serviceDiscovery.lookupService(rpcRequest);
+        InetSocketAddress inetSocketAddress = serviceDiscovery.lookupService(rpcRequest,rpcServiceConfig);
 
         Channel channel = null;
         try {

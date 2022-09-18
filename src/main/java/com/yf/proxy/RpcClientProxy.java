@@ -4,16 +4,19 @@ import com.yf.common.enums.RpcErrorMessageEnum;
 import com.yf.common.enums.RpcResponseCodeEnum;
 import com.yf.common.exception.RpcException;
 import com.yf.config.RpcServiceConfig;
+import com.yf.remoting.constants.RpcConstants;
 import com.yf.remoting.dto.RpcRequest;
 import com.yf.remoting.dto.RpcResponse;
 import com.yf.transport.RpcRequestTransport;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * @description: TODO
@@ -28,6 +31,8 @@ public class RpcClientProxy implements InvocationHandler {
     private static final String INTERFACE_NAME = "interfaceName";
     private final RpcServiceConfig rpcServiceConfig;
     private final RpcRequestTransport rpcRequestTransport;
+
+    private final AtomicInteger retryTime = new AtomicInteger(RpcConstants.MAX_RECONNECTION_TIMES);
 
     public RpcClientProxy(RpcServiceConfig rpcServiceConfig, RpcRequestTransport rpcRequestTransport){
         this.rpcRequestTransport = rpcRequestTransport;
@@ -61,10 +66,17 @@ public class RpcClientProxy implements InvocationHandler {
                 .build();
         RpcResponse<Object> rpcResponse = null;
 
-        CompletableFuture<Object> completableFuture = (CompletableFuture<Object>) rpcRequestTransport.sendRpcRequest(rpcRequest);
+        CompletableFuture<Object> completableFuture = (CompletableFuture<Object>) rpcRequestTransport.sendRpcRequest(rpcRequest,rpcServiceConfig);
         rpcResponse = (RpcResponse<Object>) completableFuture.get();
-
         this.check(rpcResponse,rpcRequest);
+
+        // 符合触发重试条件的异常(远程 Rpc 出现问题，并不是方法本身的问题)，触发重试
+        int retry = retryTime.decrementAndGet();
+        if (rpcResponse.getCode() == RpcResponseCodeEnum.RPC_FAIL.getCode() && retry > 0){
+            return invoke(proxy, method, args);
+        }else {
+            retryTime.set(RpcConstants.MAX_RECONNECTION_TIMES);
+        }
         return rpcResponse.getData();
     }
 
