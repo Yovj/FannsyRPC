@@ -1,0 +1,2 @@
+permitInvokeFilterImpl=com.yf.filter.client.PermitInvokeFilterImpl
+directInvokeFilterImpl=com.yf.filter.client.DirectInvokeFilterImpl
